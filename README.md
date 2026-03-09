@@ -55,7 +55,7 @@ Add to your MCP client config (e.g., `.mcp.json`):
 - **mcp-www is a standard MCP server** — any MCP-compliant agent can use it with zero new client code. It's just another server in your agent's config.
 - **Supports the `_mcp` TXT record convention** — records follow a semicolon-delimited format:
   ```
-  v=mcp1; src=https://mcp.example.com; public=true; auth=oauth2; version=2024.1
+  v=mcp1; src=https://mcp.example.com; auth=oauth2
   ```
 - **Works with split-horizon DNS** — enterprise and private networks can publish internal `_mcp` records visible only inside their network, enabling private service discovery without exposing anything to the public internet.
 
