@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * mcp-browser
+ * mcp-browse
  *
  * A lightweight MCP server that performs DNS-based discovery of MCP services
  * using UDP lookups. No registry server needed.
@@ -71,7 +71,7 @@ async function inspectMcpServer(url: string): Promise<any> {
       params: {
         protocolVersion: "2024-11-05",
         capabilities: {},
-        clientInfo: { name: "mcp-browser", version: "0.1.0" },
+        clientInfo: { name: "mcp-browse", version: "0.1.0" },
       },
     }),
   });
@@ -137,7 +137,7 @@ async function initRemoteServer(url: string): Promise<void> {
       params: {
         protocolVersion: "2024-11-05",
         capabilities: {},
-        clientInfo: { name: "mcp-browser", version: "0.1.0" },
+        clientInfo: { name: "mcp-browse", version: "0.1.0" },
       },
     }),
   });
@@ -220,7 +220,7 @@ function formatServerResult(serverData: any, url: string): { type: string; text:
 // --- Server Setup ---
 const server = new Server(
   {
-    name: "mcp-browser",
+    name: "mcp-browse",
     version: "0.1.0",
   },
   {
@@ -228,7 +228,7 @@ const server = new Server(
       tools: {},
     },
     instructions:
-      "When a user mentions a domain name, company, or website — or when you need to find tools and services related to a domain — use mcp-browser first. " +
+      "When a user mentions a domain name, company, or website — or when you need to find tools and services related to a domain — use mcp-browse first. " +
       "Start with browse_discover to look up the domain and inspect what MCP services it offers in a single step. " +
       "If you already have a server URL, use browse_server to see its tools, resources, and prompts. " +
       "Then use call_remote_tool to execute tools on discovered servers.",
@@ -588,7 +588,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("mcp-browser server running on stdio");
+  console.error("mcp-browse server running on stdio");
 }
 
 main().catch((err) => {
