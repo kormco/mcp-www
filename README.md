@@ -1,4 +1,4 @@
-# mcp-browse
+# mcp-browser
 
 **DNS-based MCP service discovery over UDP.**
 
@@ -8,12 +8,12 @@ Agents need to discover MCP servers, but current approaches lean on centralized 
 
 ## How It Works
 
-**mcp-browse** is itself a standard MCP server. An agent connects to it the same way it connects to any other MCP server — no new client code, no special SDK, no registry signup.
+**mcp-browser** is itself a standard MCP server. An agent connects to it the same way it connects to any other MCP server — no new client code, no special SDK, no registry signup.
 
-Once connected, the agent calls the `browse_domain` tool with a domain name. mcp-browse performs a standard **UDP DNS TXT lookup** for `_mcp.{domain}`, parses the semicolon-delimited record, and returns structured metadata about the MCP servers published by that domain.
+Once connected, the agent calls the `browse_domain` tool with a domain name. mcp-browser performs a standard **UDP DNS TXT lookup** for `_mcp.{domain}`, parses the semicolon-delimited record, and returns structured metadata about the MCP servers published by that domain.
 
 ```
-Agent  →  mcp-browse (MCP server)  →  UDP DNS query for _mcp.example.com TXT
+Agent  →  mcp-browser (MCP server)  →  UDP DNS query for _mcp.example.com TXT
                                     ←  "v=mcp1; src=https://mcp.example.com; ..."
        ←  Structured JSON response
 ```
@@ -24,7 +24,7 @@ No HTTP registry in the loop. The DNS infrastructure **is** the registry.
 
 - **Uses UDP DNS (port 53) for lookups** — the lightest possible network primitive. No TCP handshake, no TLS negotiation, no HTTP overhead. A single UDP packet out, a single packet back.
 - **The DNS infrastructure IS the registry** — no additional servers to deploy, no uptime to maintain, no accounts to create. If you can publish a TXT record, you can advertise your MCP server.
-- **mcp-browse is a standard MCP server** — any MCP-compliant agent can use it with zero new client code. It's just another server in your agent's config.
+- **mcp-browser is a standard MCP server** — any MCP-compliant agent can use it with zero new client code. It's just another server in your agent's config.
 - **Supports the `_mcp` TXT record convention** — records follow a semicolon-delimited format:
   ```
   v=mcp1; src=https://mcp.example.com; public=true; auth=oauth2; version=2024.1
