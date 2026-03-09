@@ -48,9 +48,22 @@ Lookup `_mcp.{domain}` TXT records and return a parsed list of discovered MCP se
 
 Returns structured server metadata: server URL, protocol version, auth requirements, and any additional fields published in the TXT record.
 
+### `browse_discover`
+
+Discover and inspect in one step. Looks up `_mcp.{domain}` TXT records, connects to the advertised server URL, and retrieves its full manifest — tools, resources, and prompts.
+
+```json
+{
+  "tool": "browse_discover",
+  "arguments": {
+    "domain": "example.com"
+  }
+}
+```
+
 ### `browse_server`
 
-Given a discovered server URL, connect to it and retrieve its `tools/list` manifest. Lets the agent inspect what a discovered server actually offers before deciding to connect.
+Given a discovered server URL, connect to it and retrieve its full manifest: tools, resources, and prompts. Lets the agent inspect what a discovered server actually offers before deciding to connect.
 
 ```json
 {
@@ -89,19 +102,50 @@ Call a tool on a remote MCP server. Use `browse_server` first to discover availa
 }
 ```
 
+### `read_remote_resource`
+
+Read a resource from a remote MCP server. Use `browse_server` or `browse_discover` first to see available resources, then use this to read one by its URI.
+
+```json
+{
+  "tool": "read_remote_resource",
+  "arguments": {
+    "url": "https://mcp.example.com",
+    "uri": "korm://bio"
+  }
+}
+```
+
+### `get_remote_prompt`
+
+Get a prompt from a remote MCP server. Use `browse_server` or `browse_discover` first to see available prompts, then use this to retrieve one with optional arguments.
+
+```json
+{
+  "tool": "get_remote_prompt",
+  "arguments": {
+    "url": "https://mcp.example.com",
+    "prompt": "recommend-post",
+    "arguments": { "topic": "AI vision" }
+  }
+}
+```
+
 ## Try It
 
 **[korm.co](https://korm.co)** publishes a live `_mcp` TXT record. You can discover and interact with it end-to-end:
 
 ```
-browse_domain("korm.co")        → discovers MCP server at https://mcp.korm.co
-browse_server("https://mcp.korm.co")  → lists available tools (list_articles, get_article, get_author_info)
+browse_discover("korm.co")      → discovers server, returns tools + resources + prompts
+browse_server("https://mcp.korm.co")  → inspects tools, resources, and prompts
 call_remote_tool("https://mcp.korm.co", "list_articles")  → returns blog articles
+read_remote_resource("https://mcp.korm.co", "korm://bio")  → reads author bio
+get_remote_prompt("https://mcp.korm.co", "recommend-post", { "topic": "AI" })  → gets prompt
 ```
 
 ## Status
 
-**Working.** The server implements DNS-based discovery, server inspection, and remote tool calling over the Streamable HTTP transport.
+**Working.** The server implements DNS-based discovery, server inspection, remote tool calling, resource reading, and prompt retrieval over the Streamable HTTP transport.
 
 Feedback, criticism, and alternative approaches are welcome — open an issue or start a discussion.
 
