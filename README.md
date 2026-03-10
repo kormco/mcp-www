@@ -165,6 +165,8 @@ Get a prompt from a remote MCP server. Use `browse_server` or `browse_discover` 
 
 ## Try It
 
+**Publish your own MCP server via _dns TXT record** - or -
+
 **[korm.co](https://korm.co)** publishes a live `_mcp` TXT record. You can discover and interact with it end-to-end:
 
 ```
@@ -174,6 +176,7 @@ call_remote_tool("https://mcp.korm.co", "list_articles")  → returns blog artic
 read_remote_resource("https://mcp.korm.co", "korm://bio")  → reads author bio
 get_remote_prompt("https://mcp.korm.co", "recommend-post", { "topic": "AI" })  → gets prompt
 ```
+NOTE: korm.co is a construction zone of new services so pardon any dust or temporary infra outages, thanks for your patience.
 
 ## Status
 
