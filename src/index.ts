@@ -62,6 +62,19 @@ function detectHomograph(domain: string): string | null {
   return null;
 }
 
+function formatHomographWarning(warning: string): { type: string; text: string } {
+  return {
+    type: "text",
+    text: [
+      "////// SECURITY WARNING //////",
+      "IDN HOMOGRAPH ATTACK DETECTED",
+      warning,
+      "DO NOT proceed without verifying this is the intended domain. Ask the user to confirm.",
+      "//////////////////////////////",
+    ].join("\n"),
+  };
+}
+
 // --- TXT Record Parser ---
 function parseMcpTxtRecord(txtRecords: string[][]): Record<string, string> {
   // TXT records come as arrays of strings (chunked), join them
@@ -445,14 +458,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       try {
         const { record, homograph_warning } = await lookupMcpDomain(domain);
+        const warningBlock = homograph_warning ? [formatHomographWarning(homograph_warning)] : [];
 
         if (record === null) {
           return {
             content: [
+              ...warningBlock,
               {
                 type: "text",
                 text: JSON.stringify(
-                  { domain, found: false, message: `No _mcp.${domain} TXT record found`, ...(homograph_warning && { homograph_warning }) },
+                  { domain, found: false, message: `No _mcp.${domain} TXT record found` },
                   null,
                   2
                 ),
@@ -463,9 +478,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         return {
           content: [
+            ...warningBlock,
             {
               type: "text",
-              text: JSON.stringify({ domain, found: true, record, ...(homograph_warning && { homograph_warning }) }, null, 2),
+              text: JSON.stringify({ domain, found: true, record }, null, 2),
             },
           ],
         };
@@ -505,22 +521,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const domains = (args as { domains: string[] }).domains;
 
       const results: Record<string, any> = {};
+      const warnings: { domain: string; warning: string }[] = [];
 
       await Promise.all(
         domains.map(async (domain) => {
           try {
             const { record, homograph_warning } = await lookupMcpDomain(domain);
             results[domain] = record !== null
-              ? { found: true, record, ...(homograph_warning && { homograph_warning }) }
-              : { found: false, ...(homograph_warning && { homograph_warning }) };
+              ? { found: true, record }
+              : { found: false };
+            if (homograph_warning) warnings.push({ domain, warning: homograph_warning });
           } catch (err: any) {
             results[domain] = { error: err.message };
           }
         })
       );
 
+      const warningBlocks = warnings.map((w) =>
+        formatHomographWarning(`[${w.domain}] ${w.warning}`)
+      );
+
       return {
         content: [
+          ...warningBlocks,
           {
             type: "text",
             text: JSON.stringify(results, null, 2),
@@ -534,18 +557,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       try {
         const result = await discoverMcpDomain(domain);
+        const warningBlock = result.homograph_warning ? [formatHomographWarning(result.homograph_warning)] : [];
+
         // If we got server data with instructions, surface them prominently
         if (result.server && !result.server.error && result.server.instructions) {
           const content = formatServerResult(result.server, result.server.url);
-          // Prepend the discovery context
+          // Prepend warning + discovery context
           content.unshift({
             type: "text",
             text: `Discovered MCP server for ${domain} via DNS lookup of _mcp.${domain}`,
           });
+          content.unshift(...warningBlock);
           return { content };
         }
         return {
           content: [
+            ...warningBlock,
             {
               type: "text",
               text: JSON.stringify(result, null, 2),
