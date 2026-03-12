@@ -15,21 +15,24 @@ No test or lint scripts are configured.
 
 ## Architecture
 
-mcp-www is a single-file MCP server (`src/index.ts`, ~610 lines) that enables **DNS-based MCP service discovery**. Instead of centralized registries, it uses DNS TXT records at `_mcp.{domain}` to discover MCP servers.
+mcp-www is a single-file MCP server (`src/index.ts`, ~700 lines) that enables DNS-based MCP service discovery using UDP TXT lookups at `_mcp.{domain}`. It is both an MCP server itself (connected via stdio) and an MCP client (connecting to remote servers over Streamable HTTP).
 
-**Layers in `src/index.ts`:**
+**Dual role:** The server receives requests from agents via `StdioServerTransport`, then acts as a client by making raw `fetch`-based JSON-RPC calls to remote MCP servers. There is no SDK client usage — all remote communication is hand-rolled HTTP + JSON-RPC (initialize handshake → session ID → method calls).
 
-1. **DNS Lookup** — `lookupMcpDomain()` performs UDP DNS TXT lookups for `_mcp.{domain}`, `parseMcpTxtRecord()` parses semicolon-delimited key-value pairs
-2. **Server Inspection** — `inspectMcpServer()` connects to discovered MCP servers via HTTP, performs JSON-RPC initialize handshake, retrieves tools/resources/prompts
-3. **Remote Communication** — `callRemoteTool()`, `readRemoteResource()`, `getRemotePrompt()` execute operations on remote servers with session management
-4. **Tool Handlers** — 7 MCP tools exposed to agents: `browse_domain`, `browse_server`, `browse_multi`, `browse_discover`, `call_remote_tool`, `read_remote_resource`, `get_remote_prompt`
+**Flow layers in `src/index.ts`:**
 
-**Transport:** Connects to agents via stdio (`StdioServerTransport`). Communicates with remote MCP servers via HTTP fetch using JSON-RPC.
+1. **IDN Homograph Detection** — `detectHomograph()` checks for punycode, mixed-script, and non-Latin labels before any DNS lookup. Warnings are surfaced as separate content blocks, never blocking.
+2. **DNS Lookup** — `lookupMcpDomain()` resolves `_mcp.{domain}` TXT records via `dns.resolveTxt()` (UDP). `parseMcpTxtRecord()` parses semicolon-delimited `key=value` pairs.
+3. **Server Inspection** — `inspectMcpServer()` performs JSON-RPC `initialize` handshake, then parallel-fetches `tools/list`, `resources/list`, `prompts/list`.
+4. **Remote Execution** — `callRemoteTool()`, `readRemoteResource()`, `getRemotePrompt()` each call `initRemoteServer()` for a fresh session, then `jsonRpcCall()` for the actual method.
+5. **Tool Handlers** — 7 tools exposed: `browse_domain`, `browse_server`, `browse_multi`, `browse_discover`, `call_remote_tool`, `read_remote_resource`, `get_remote_prompt`.
 
-**Key dependency:** `@modelcontextprotocol/sdk` — the official MCP SDK.
+**Key patterns:**
+- Every remote operation creates a new session (no session reuse/pooling)
+- `browse_discover` = DNS lookup + server inspection in one call
+- Server `instructions` from remote servers are surfaced prominently so the model follows them
+- DNS resolver can be overridden via `MCP_DNS_SERVER` env var (e.g., `MCP_DNS_SERVER=192.168.68.133:5335`)
 
-## DNS TXT Record Format
+**DNS TXT Record Format:** `v=mcp1; src=https://...; auth=oauth2; description=...`
 
-Records are semicolon-delimited: `name=value;endpoint=https://...;description=...`
-
-The server looks up `_mcp.{domain}` TXT records. See korm.co for live examples.
+**Key dependency:** `@modelcontextprotocol/sdk` (server-side only — used for `Server`, `StdioServerTransport`, and request schemas).

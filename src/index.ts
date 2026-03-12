@@ -276,6 +276,104 @@ async function getRemotePrompt(
   return jsonRpcCall(url, 2, "prompts/get", { name: promptName, arguments: promptArgs }, sessionId);
 }
 
+// --- Broad Discovery (browse_all) ---
+async function fetchLlmsTxt(domain: string): Promise<string | null> {
+  try {
+    const response = await fetch(`https://${domain}/llms.txt`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return null;
+    const text = await response.text();
+    return text.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchServerCard(domain: string): Promise<any | null> {
+  try {
+    const response = await fetch(`https://${domain}/.well-known/mcp.json`, {
+      signal: AbortSignal.timeout(10000),
+      headers: { "Accept": "application/json" },
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function probeDirectMcp(domain: string): Promise<any | null> {
+  // Try common MCP endpoint patterns
+  const candidates = [`https://mcp.${domain}`, `https://${domain}`];
+
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(10000),
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2024-11-05",
+            capabilities: {},
+            clientInfo: { name: "mcp-www", version: "0.1.0" },
+          },
+        }),
+      });
+
+      if (!response.ok) continue;
+      const result = await response.json();
+      if (result?.result?.protocolVersion) {
+        return { url, serverInfo: result.result.serverInfo || null, protocolVersion: result.result.protocolVersion };
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function browseAll(domain: string): Promise<any> {
+  const normalized = domain.normalize("NFC");
+  const warning = detectHomograph(normalized);
+
+  const [dnsResult, llmsTxt, serverCard, directProbe] = await Promise.all([
+    lookupMcpDomain(normalized),
+    fetchLlmsTxt(normalized),
+    fetchServerCard(normalized),
+    probeDirectMcp(normalized),
+  ]);
+
+  // If DNS found a server URL, inspect it too
+  let dnsServer = null;
+  if (dnsResult.record) {
+    const serverUrl = dnsResult.record.src || dnsResult.record.endpoint;
+    if (serverUrl) {
+      try {
+        dnsServer = await inspectMcpServer(serverUrl);
+        dnsServer = { url: serverUrl, ...dnsServer };
+      } catch (err: any) {
+        dnsServer = { url: serverUrl, error: err.message };
+      }
+    }
+  }
+
+  return {
+    domain: normalized,
+    ...(warning && { homograph_warning: warning }),
+    dns: dnsResult.record
+      ? { found: true, record: dnsResult.record, server: dnsServer }
+      : { found: false },
+    llms_txt: llmsTxt,
+    server_card: serverCard,
+    direct: directProbe,
+  };
+}
+
 // --- Response Formatting ---
 function formatServerResult(serverData: any, url: string): { type: string; text: string }[] {
   const content: { type: string; text: string }[] = [];
@@ -372,6 +470,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "browse_discover",
         description:
           "Start here when a user mentions any domain name or website. Looks up _mcp.{domain} DNS TXT records, then connects to the advertised server URL to retrieve its full manifest (tools, resources, and prompts) — all in one step.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            domain: {
+              type: "string",
+              description: "The domain to discover (e.g., 'example.com')",
+            },
+          },
+          required: ["domain"],
+        },
+      },
+      {
+        name: "browse_all",
+        description:
+          "Comprehensive discovery across all known mechanisms for a single domain. Concurrently checks DNS TXT records (_mcp.{domain}), llms.txt, .well-known/mcp.json (server card), and direct MCP endpoint probing. Returns a unified response with results from each method.",
         inputSchema: {
           type: "object",
           properties: {
@@ -585,6 +698,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             },
           ],
         };
+      } catch (err: any) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ domain, error: err.message }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
+    case "browse_all": {
+      const domain = (args as { domain: string }).domain;
+
+      try {
+        const result = await browseAll(domain);
+        const warningBlock = result.homograph_warning ? [formatHomographWarning(result.homograph_warning)] : [];
+        const content: { type: string; text: string }[] = [...warningBlock];
+
+        // Surface llms.txt as raw context
+        if (result.llms_txt) {
+          content.push({
+            type: "text",
+            text: `[llms.txt for ${domain}]\n${result.llms_txt}`,
+          });
+        }
+
+        // Surface server instructions if found via DNS
+        if (result.dns?.server && !result.dns.server.error && result.dns.server.instructions) {
+          content.push({
+            type: "text",
+            text:
+              `[Server Instructions from ${result.dns.server.serverInfo?.name || result.dns.server.url}]\n` +
+              `${result.dns.server.instructions}\n` +
+              `Use call_remote_tool with url "${result.dns.server.url}" to execute any of the tools listed below.`,
+          });
+        }
+
+        // Unified structured response
+        content.push({
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        });
+
+        return { content };
       } catch (err: any) {
         return {
           content: [
