@@ -15,6 +15,12 @@ import {
 import dns from "node:dns";
 import { promisify } from "node:util";
 
+// Allow overriding the DNS resolver via environment variable.
+// Supports "host:port" format (e.g., "192.168.68.133:5335").
+if (process.env.MCP_DNS_SERVER) {
+  dns.setServers([process.env.MCP_DNS_SERVER]);
+}
+
 const resolveTxt = promisify(dns.resolveTxt);
 
 // --- IDN Homograph Detection ---
