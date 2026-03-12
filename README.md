@@ -86,6 +86,19 @@ get_remote_prompt("https://mcp.korm.co", "recommend-post", { "topic": "AI" })  �
 
 ## Tools Exposed
 
+### `browse_discover`
+
+Discover and inspect in one step. Looks up `_mcp.{domain}` TXT records, connects to the advertised server URL, and retrieves its full manifest — tools, resources, and prompts.
+
+```json
+{
+  "tool": "browse_discover",
+  "arguments": {
+    "domain": "example.com"
+  }
+}
+```
+
 ### `browse_all`
 
 Comprehensive discovery across all known mechanisms for a single domain. Concurrently checks DNS TXT records (`_mcp.{domain}`), `llms.txt`, `.well-known/mcp.json` (server card), and direct MCP endpoint probing. Returns a unified response with results from each method.
@@ -125,18 +138,7 @@ Lookup `_mcp.{domain}` TXT records and return a parsed list of discovered MCP se
 
 Returns structured server metadata: server URL, protocol version, auth requirements, and any additional fields published in the TXT record.
 
-### `browse_discover`
 
-Discover and inspect in one step. Looks up `_mcp.{domain}` TXT records, connects to the advertised server URL, and retrieves its full manifest — tools, resources, and prompts.
-
-```json
-{
-  "tool": "browse_discover",
-  "arguments": {
-    "domain": "example.com"
-  }
-}
-```
 
 ### `browse_server`
 
