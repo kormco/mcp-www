@@ -189,6 +189,29 @@ Get a prompt from a remote MCP server. Use `browse_server` or `browse_discover` 
 
 Feedback, criticism, and alternative approaches are welcome — open an issue or start a discussion.
 
+## Security
+
+### DNS-based trust model
+
+Because mcp-www uses DNS TXT records for discovery, domain ownership is enforced by DNS infrastructure itself — only the domain owner (or their DNS provider) can publish `_mcp` TXT records. This is inherently stronger than centralized registries, which introduce a single point of compromise.
+
+### IDN homograph attack detection
+
+mcp-www detects [IDN homograph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) on all domain lookups. These attacks use visually identical characters from different Unicode scripts (e.g., Cyrillic "а" vs Latin "a") to spoof legitimate domains. For example, `xn--80ak6aa92e.com` renders as `apple.com` but resolves to an attacker-controlled server.
+
+Detection covers:
+- **Punycode-encoded domains** — labels starting with `xn--` (the ASCII encoding of internationalized domain names)
+- **Mixed-script labels** — a single label containing characters from multiple scripts (e.g., Latin + Cyrillic)
+- **Non-Latin labels** — fully Cyrillic/Greek labels that could visually mimic common Latin domains
+
+When detected, a prominent warning is surfaced as a separate content block in the tool response, instructing the agent to verify the domain with the user before proceeding. Lookups are not blocked — the warning is informational, giving the agent and user the context to make an informed decision.
+
+### Additional considerations
+
+- **No implicit trust** — mcp-www discovers and inspects remote servers, but tool execution (`call_remote_tool`) is always an explicit agent action. The agent must choose to call a tool after reviewing the server manifest.
+- **Split-horizon DNS** — private/internal `_mcp` records are only resolvable within the network they're published on, preventing accidental exposure of internal services.
+- **Unicode normalization** — all domain inputs are NFC-normalized before lookup to prevent equivalent-but-different Unicode representations from bypassing detection.
+
 ## Related
 
 - [Model Context Protocol Specification](https://modelcontextprotocol.io/specification)
