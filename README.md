@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
-**DNS-based MCP service discovery over UDP.**
+**Multi-mechanism MCP service discovery — DNS, llms.txt, server cards, and direct probing.**
 
 ## Problem
 
@@ -62,7 +62,8 @@ Add to your MCP client config (e.g., `.mcp.json`):
 **[korm.co](https://korm.co)** publishes a live `_mcp` TXT record. You can discover and interact with it end-to-end:
 
 ```
-browse_discover("korm.co")      → discovers server, returns tools + resources + prompts
+browse_all("korm.co")           → checks DNS, llms.txt, server card, and direct probe in one call
+browse_discover("korm.co")      → discovers server via DNS, returns tools + resources + prompts
 browse_server("https://mcp.korm.co")  → inspects tools, resources, and prompts
 call_remote_tool("https://mcp.korm.co", "list_articles")  → returns blog articles
 read_remote_resource("https://mcp.korm.co", "korm://bio")  → reads author bio
@@ -84,6 +85,30 @@ get_remote_prompt("https://mcp.korm.co", "recommend-post", { "topic": "AI" })  �
 - Allows overriding the default system DNS resolver via environment variable. Useful for benchmarking with a local resolver or pointing at a specific DNS infrastructure. MCP_DNS_SERVER=192.168.68.133:5335 npx mcp-www
 
 ## Tools Exposed
+
+### `browse_all`
+
+Comprehensive discovery across all known mechanisms for a single domain. Concurrently checks DNS TXT records (`_mcp.{domain}`), `llms.txt`, `.well-known/mcp.json` (server card), and direct MCP endpoint probing. Returns a unified response with results from each method.
+
+```json
+{
+  "tool": "browse_all",
+  "arguments": {
+    "domain": "example.com"
+  }
+}
+```
+
+Returns:
+```json
+{
+  "domain": "example.com",
+  "dns": { "found": true, "record": {}, "server": {} },
+  "llms_txt": "# Example\n...",
+  "server_card": {},
+  "direct": { "url": "https://mcp.example.com", "serverInfo": {} }
+}
+```
 
 ### `browse_domain`
 
