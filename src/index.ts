@@ -180,23 +180,32 @@ async function fetchServerCard(domain: string): Promise<any | null> {
   }
 }
 
-// --- Browse: parallel server card + MCP initialize ---
+// --- Browse: server card first, MCP init as fallback ---
 async function browseDomain(domain: string): Promise<any> {
   const normalized = domain.normalize("NFC");
   const warning = detectHomograph(normalized);
 
-  // First, DNS lookup to find server URLs
   const { records } = await lookupMcpDomain(normalized);
 
-  // Extract all server URLs from DNS records
   const serverUrls = records
     .map((r) => r.src || r.endpoint)
     .filter(Boolean) as string[];
 
-  // Parallel: server card + inspect all DNS-advertised servers
-  const [serverCard, ...serverResults] = await Promise.all([
-    fetchServerCard(normalized),
-    ...serverUrls.map(async (url) => {
+  // Try server card first (cheap HTTP GET)
+  const serverCard = await fetchServerCard(normalized);
+  if (serverCard) {
+    return {
+      domain: normalized,
+      ...(warning && { homograph_warning: warning }),
+      dns_records: records,
+      server_card: serverCard,
+      server_urls: serverUrls,
+    };
+  }
+
+  // Fallback: MCP initialize handshake on DNS-advertised servers
+  const serverResults = await Promise.all(
+    serverUrls.map(async (url) => {
       try {
         const info = await inspectMcpServer(url);
         return { url, ...info };
@@ -204,19 +213,27 @@ async function browseDomain(domain: string): Promise<any> {
         return { url, error: err.message };
       }
     }),
-  ]);
+  );
 
   return {
     domain: normalized,
     ...(warning && { homograph_warning: warning }),
     dns_records: records,
-    server_card: serverCard,
+    server_card: null,
     servers: serverResults,
   };
 }
 
-// --- Browse by URL ---
+// --- Browse by URL: server card from hostname, init as fallback ---
 async function browseUrl(url: string): Promise<any> {
+  // Try to derive domain for server card
+  const hostname = new URL(url).hostname;
+  const serverCard = await fetchServerCard(hostname);
+  if (serverCard) {
+    return { url, server_card: serverCard };
+  }
+
+  // Fallback: MCP init
   const info = await inspectMcpServer(url);
   return { url, ...info };
 }
@@ -446,7 +463,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "browse",
         description:
-          "Connect and inspect. Takes a domain or server URL. For domains: parallel fetch of .well-known/mcp.json (server card) and MCP initialize handshake on all DNS-advertised servers. For URLs: direct MCP handshake. Returns full server manifest (tools, resources, prompts).",
+          "Inspect a domain or server URL. Tries .well-known/mcp.json (server card) first, only falls back to MCP initialize handshake if no server card is found. For domains: also performs DNS lookup for _mcp TXT records.",
         inputSchema: {
           type: "object",
           properties: {

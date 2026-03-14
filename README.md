@@ -58,8 +58,9 @@ Add to your MCP client config (e.g., `.mcp.json`):
 **[korm.co](https://korm.co)** publishes a live `_mcp` TXT record. You can discover and interact with it end-to-end:
 
 ```
-discover("korm.co")           → DNS lookup, returns all _mcp TXT records
-browse({ domain: "korm.co" }) → parallel server card + MCP handshake, full manifest
+discover("korm.co")            → DNS lookup, returns all _mcp TXT records
+discover_browse("korm.co")     → DNS + server card in one call, init as fallback
+browse({ domain: "korm.co" })  → server card first, MCP handshake as fallback
 call_remote_tool("https://mcp.korm.co", "browse_posts")  → returns blog articles
 read_remote_resource("https://mcp.korm.co", "korm://bio") → reads author bio
 get_remote_prompt("https://mcp.korm.co", "recommend-post", { "topic": "AI" }) → gets prompt
@@ -90,9 +91,17 @@ DNS-only lookup. Returns all `_mcp.{domain}` TXT records — there can be multip
 { "tool": "discover", "arguments": { "domains": ["example.com", "acme.org"] } }
 ```
 
+### `discover_browse`
+
+DNS lookup + server card in one call. Looks up all `_mcp.{domain}` TXT records, then fetches `.well-known/mcp.json` for server metadata. Only falls back to MCP initialize if no server card is found.
+
+```json
+{ "tool": "discover_browse", "arguments": { "domain": "example.com" } }
+```
+
 ### `browse`
 
-Connect and inspect. Takes a domain or server URL. For domains: parallel fetch of `.well-known/mcp.json` (server card) and MCP initialize handshake on all DNS-advertised servers. Returns full server manifest (tools, resources, prompts).
+Inspect a domain or server URL. Tries `.well-known/mcp.json` (server card) first, only falls back to MCP initialize handshake if no server card is found. For domains: also performs DNS lookup for `_mcp` TXT records.
 
 ```json
 { "tool": "browse", "arguments": { "domain": "example.com" } }
