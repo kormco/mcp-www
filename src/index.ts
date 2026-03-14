@@ -293,6 +293,44 @@ async function getRemotePrompt(
   return jsonRpcCall(url, 2, "prompts/get", { name: promptName, arguments: promptArgs }, sessionId);
 }
 
+// --- Discover + Browse (lightweight: DNS + server card, init as fallback) ---
+async function discoverBrowse(domain: string): Promise<any> {
+  const normalized = domain.normalize("NFC");
+  const warning = detectHomograph(normalized);
+
+  const { records } = await lookupMcpDomain(normalized);
+
+  const base: any = {
+    domain: normalized,
+    ...(warning && { homograph_warning: warning }),
+    dns_records: records,
+  };
+
+  if (records.length === 0) {
+    return { ...base, found: false, message: `No _mcp.${normalized} TXT record found` };
+  }
+
+  // Take the first server URL
+  const serverUrl = records.map((r) => r.src || r.endpoint).find(Boolean);
+  if (!serverUrl) {
+    return { ...base, found: true, server: null, message: "No server URL (src/endpoint) in TXT records" };
+  }
+
+  // Try server card first (cheap HTTP GET)
+  const serverCard = await fetchServerCard(normalized);
+  if (serverCard) {
+    return { ...base, found: true, server_url: serverUrl, server_card: serverCard };
+  }
+
+  // Fallback: MCP initialize handshake
+  try {
+    const serverInfo = await inspectMcpServer(serverUrl);
+    return { ...base, found: true, server_url: serverUrl, server: serverInfo };
+  } catch (err: any) {
+    return { ...base, found: true, server_url: serverUrl, server: { error: err.message } };
+  }
+}
+
 // --- Server Registration ---
 function generateRegistrationConfig(url: string, serverName: string): any {
   const platform = process.platform;
@@ -360,8 +398,8 @@ const server = new Server(
     },
     instructions:
       "When a user mentions a domain name, company, or website — or when you need to find tools and services related to a domain — use mcp-www. " +
-      "Start with discover to check DNS for MCP TXT records. " +
-      "Use browse to connect and inspect a domain's MCP servers (parallel server card + handshake). " +
+      "Start with discover_browse for a quick one-step DNS + server card lookup. " +
+      "Use browse for full MCP handshake and complete server manifest. " +
       "Use call_remote_tool to execute tools on discovered servers. " +
       "Use install to permanently add a discovered server to the user's MCP client.",
   }
@@ -388,6 +426,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: "Multiple domains to look up in parallel",
             },
           },
+        },
+      },
+      {
+        name: "discover_browse",
+        description:
+          "DNS lookup + server card in one call. Looks up all _mcp.{domain} TXT records, then fetches .well-known/mcp.json for server metadata. Only falls back to MCP initialize if no server card is found. Lighter than browse — no MCP session unless needed.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            domain: {
+              type: "string",
+              description: "The domain to discover and browse (e.g., 'example.com')",
+            },
+          },
+          required: ["domain"],
         },
       },
       {
@@ -549,6 +602,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       return { content };
+    }
+
+    case "discover_browse": {
+      const domain = (args as { domain: string }).domain;
+
+      try {
+        const result = await discoverBrowse(domain);
+        const content: { type: string; text: string }[] = [];
+
+        if (result.homograph_warning) {
+          content.push(formatHomographWarning(result.homograph_warning));
+        }
+
+        content.push({
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        });
+
+        if (result.server_url) {
+          content.push({
+            type: "text",
+            text: `Use browse to get the full server manifest, or install to add this server to your MCP client.`,
+          });
+        }
+
+        return { content };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ domain, error: err.message }, null, 2) }],
+          isError: true,
+        };
+      }
     }
 
     case "browse": {
