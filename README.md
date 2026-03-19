@@ -166,6 +166,8 @@ Generate client configuration to permanently add a discovered MCP server. Return
 
 **Working.** The server implements DNS-based discovery, server inspection, remote tool calling, resource reading, prompt retrieval, and client installation over the Streamable HTTP transport.
 
+> **Note:** DNS-based MCP discovery via `_mcp` TXT records is currently in **pre-SEP research status** — it is not yet a ratified part of the Model Context Protocol specification. See [Discussion #2334](https://github.com/modelcontextprotocol/modelcontextprotocol/discussions/2334) and [Discussion #2368](https://github.com/modelcontextprotocol/modelcontextprotocol/discussions/2368) for ongoing work. The format and behavior may change as the specification evolves.
+
 Feedback, criticism, and alternative approaches are welcome — open an issue or start a discussion.
 
 ## Security
