@@ -77,6 +77,20 @@ function formatHomographWarning(warning: string): { type: string; text: string }
   };
 }
 
+function formatMissingDnsWarning(domain: string): { type: string; text: string } {
+  return {
+    type: "text",
+    text: [
+      "////// NOTICE //////",
+      `No _mcp.${domain} DNS TXT record found.`,
+      "This server was discovered via fallback (server card or direct MCP handshake).",
+      "Publishing an _mcp TXT record enables DNS-based discovery and is recommended.",
+      "Note: DNS-based MCP discovery via _mcp TXT records is currently in pre-SEP research status.",
+      "////////////////////",
+    ].join("\n"),
+  };
+}
+
 // --- TXT Record Parser ---
 function parseSingleTxtRecord(chunks: string[]): Record<string, string> {
   const fullRecord = chunks.join("");
@@ -191,12 +205,15 @@ async function browseDomain(domain: string): Promise<any> {
     .map((r) => r.src || r.endpoint)
     .filter(Boolean) as string[];
 
+  const missingDns = records.length === 0;
+
   // Try server card first (cheap HTTP GET)
   const serverCard = await fetchServerCard(normalized);
   if (serverCard) {
     return {
       domain: normalized,
       ...(warning && { homograph_warning: warning }),
+      ...(missingDns && { missing_dns_txt: true }),
       dns_records: records,
       server_card: serverCard,
       server_urls: serverUrls,
@@ -218,6 +235,7 @@ async function browseDomain(domain: string): Promise<any> {
   return {
     domain: normalized,
     ...(warning && { homograph_warning: warning }),
+    ...(missingDns && { missing_dns_txt: true }),
     dns_records: records,
     server_card: null,
     servers: serverResults,
@@ -226,16 +244,21 @@ async function browseDomain(domain: string): Promise<any> {
 
 // --- Browse by URL: server card from hostname, init as fallback ---
 async function browseUrl(url: string): Promise<any> {
-  // Try to derive domain for server card
   const hostname = new URL(url).hostname;
+
+  // Check for DNS TXT record
+  const { records } = await lookupMcpDomain(hostname);
+  const missingDns = records.length === 0;
+
+  // Try server card first (cheap HTTP GET)
   const serverCard = await fetchServerCard(hostname);
   if (serverCard) {
-    return { url, server_card: serverCard };
+    return { url, ...(missingDns && { missing_dns_txt: true }), server_card: serverCard };
   }
 
   // Fallback: MCP init
   const info = await inspectMcpServer(url);
-  return { url, ...info };
+  return { url, ...(missingDns && { missing_dns_txt: true }), ...info };
 }
 
 // --- Remote Server Helpers ---
@@ -675,6 +698,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const warningText = result.homograph_warning;
         if (warningText) {
           content.push(formatHomographWarning(warningText));
+        }
+
+        if (result.missing_dns_txt) {
+          content.push(formatMissingDnsWarning(result.domain || new URL(result.url).hostname));
         }
 
         // Surface instructions from any successfully connected server

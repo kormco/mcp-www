@@ -26,12 +26,13 @@ mcp-www is a single-file MCP server (`src/index.ts`) that enables DNS-based MCP 
 3. **Browse** — `browseDomain()` runs parallel server card (`.well-known/mcp.json`) fetch + MCP `initialize` handshake on all DNS-advertised server URLs. `browseUrl()` does direct inspection of a known URL.
 4. **Remote Execution** — `callRemoteTool()`, `readRemoteResource()`, `getRemotePrompt()` each call `initRemoteServer()` for a fresh session, then `jsonRpcCall()` for the actual method.
 5. **Install** — `generateRegistrationConfig()` produces config file paths and JSON entries for Claude Desktop, VS Code, Cursor, and Windsurf. The agent performs the actual file I/O.
-6. **Tool Handlers** — 6 tools exposed: `discover`, `browse`, `call_remote_tool`, `read_remote_resource`, `get_remote_prompt`, `install`.
+6. **Tool Handlers** — 7 tools exposed: `discover`, `discover_browse`, `browse`, `call_remote_tool`, `read_remote_resource`, `get_remote_prompt`, `install`.
 
 **Key patterns:**
 - Every remote operation creates a new session (no session reuse/pooling)
 - `discover` = DNS-only, returns all TXT records (there can be multiple per domain)
-- `browse` = parallel server card + MCP handshake, suggests `install` after success
+- `discover_browse` = DNS lookup + server card fetch in one call, MCP init only as fallback
+- `browse` = server card first with MCP handshake as fallback, suggests `install` after success
 - `install` = recipe generator — returns config JSON for the agent to write, not a direct file operation
 - Server `instructions` from remote servers are surfaced prominently so the model follows them
 - DNS resolver can be overridden via `MCP_DNS_SERVER` env var (e.g., `MCP_DNS_SERVER=192.168.68.133:5335`)
